@@ -1,0 +1,9 @@
+bool enableRecognition
+bool enableSkeleton
+bool enablePointingGesture
+bool enableWaveGesture
+bool enableLandmarks
+bool enableHeadBoundingBox
+bool enableHeadPose
+---
+bool status
