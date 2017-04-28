@@ -35,7 +35,8 @@ class NodeletCamera: public nodelet::Nodelet
 {
 public:
   NodeletCamera() :
-    cameraStarted_(false)
+    cameraStarted_(false),
+    intialize_time_base_(false)
   {
     // Types for depth stream
     format_[rs::stream::depth] = rs::format::z16;   // libRS type
@@ -209,11 +210,6 @@ private:
       info_publisher_[rs::stream::fisheye] = 
         node_handle.advertise< sensor_msgs::CameraInfo >("camera/fisheye/camera_info", 1);
 
-      // HW timestamp version of image publishers, for realsense_ros_slam package
-      image_publishers_hw_timestamp_[rs::stream::color] = node_handle.advertise<sensor_msgs::Image>("/camera/color/image_raw_hw_timestamp", 1);
-      image_publishers_hw_timestamp_[rs::stream::depth] = node_handle.advertise<sensor_msgs::Image>("/camera/depth/image_raw_hw_timestamp", 1);
-      image_publishers_hw_timestamp_[rs::stream::fisheye] = node_handle.advertise<sensor_msgs::Image>("/camera/fisheye/image_raw_hw_timestamp", 1);
-
       imu_publishers_[RS_EVENT_IMU_GYRO] = node_handle.advertise< sensor_msgs::Imu >("camera/gyro/sample", 100); 
       imu_publishers_[RS_EVENT_IMU_ACCEL] = node_handle.advertise< sensor_msgs::Imu >("camera/accel/sample", 100);
 
@@ -240,14 +236,33 @@ private:
       stream_callback_per_stream[stream] = [this,stream](rs::frame frame)
       {
         image_[stream].data = (unsigned char *) frame.get_data();
-        ros::Time t = ros::Time::now();
+        
+        if ((true == isZR300_) && (rs::timestamp_domain::microcontroller != frame.get_frame_timestamp_domain()))
+        {
+          ROS_ERROR_STREAM("error: Junk time stamp in stream:" << (int)(stream) <<
+            "\twith frame counter:" << frame.get_frame_number());
+          return;
+        }
 
+        // We compute a ROS timestamp which is based on an initial ROS time at point of first frame,
+        // and the incremental timestamp from the camera.
+        if(false == intialize_time_base_)
+        {
+          intialize_time_base_ = true;
+          ros_time_base_ = ros::Time::now();   
+          camera_time_base_ = frame.get_timestamp();
+        }
+        double elapsed_camera_ms = (/*ms*/ frame.get_timestamp() - /*ms*/ camera_time_base_) / /*ms to seconds*/ 1000;
+        ros::Time t(ros_time_base_.toSec() + elapsed_camera_ms);
+
+        // If this stream is associated with depth and we have at least one point cloud subscriber,
+        // service it here.
         if((stream == rs::stream::depth) && (0 != pointcloud_publisher_.getNumSubscribers()))
           publishPCTopic(t);
 
-        seq_[stream] += 1;                   
-        if((0 != image_publishers_[stream].getNumSubscribers()) || 
-           (0 != image_publishers_hw_timestamp_[stream].getNumSubscribers()))
+        seq_[stream] += 1;        
+        if((0 != info_publisher_[stream].getNumSubscribers()) ||
+           (0 != image_publishers_[stream].getNumSubscribers())) 
         {
           sensor_msgs::ImagePtr img;          
           img = cv_bridge::CvImage(std_msgs::Header(), encoding_[stream], image_[stream]).toImageMsg();
@@ -259,28 +274,8 @@ private:
           img->header.stamp = t;
           img->header.seq = seq_[stream];
 
-          // ROS Timestamp
-          if(0 != image_publishers_[stream].getNumSubscribers())
-            image_publishers_[stream].publish(img);
+          image_publishers_[stream].publish(img);
 
-          // Camera HW Timestamp for realsense_ros_slam
-          if(0 != image_publishers_hw_timestamp_[stream].getNumSubscribers())
-          {
-            if (rs::timestamp_domain::microcontroller != frame.get_frame_timestamp_domain())
-            {
-              ROS_ERROR_STREAM("error: Junk time stamp in stream:" << (int)(stream) <<
-                               "\twith frame counter:" << frame.get_frame_number());
-            }
-            else
-            {
-              img->header.stamp = ros::Time(frame.get_timestamp());
-              image_publishers_hw_timestamp_[stream].publish(img);
-            }
-          }
-        }
-        
-        if(0 != image_publishers_[stream].getNumSubscribers())
-        {
           camera_info_[stream].header.stamp = t;
           camera_info_[stream].header.seq = seq_[stream];
           info_publisher_[stream].publish(camera_info_[stream]);
@@ -307,6 +302,7 @@ private:
     {
       // Needed to align image timestamps to common clock-domain with the motion events
       device_->set_option(rs::option::fisheye_strobe, 1); 
+
       // This option causes the fisheye image to be aquired in-sync with the depth image.
       device_->set_option(rs::option::fisheye_external_trigger, 1); 
       device_->set_option(rs::option::fisheye_color_auto_exposure, 1);
@@ -328,8 +324,12 @@ private:
         if( 0 == imu_publishers_[motionType].getNumSubscribers())
           return;
 
+        if(false == intialize_time_base_)
+          return;
+        double elapsed_camera_ms = (/*ms*/ entry.timestamp_data.timestamp - /*ms*/ camera_time_base_) / /*ms to seconds*/ 1000;
+        ros::Time t(ros_time_base_.toSec() + elapsed_camera_ms);
+
         sensor_msgs::Imu imu_msg = sensor_msgs::Imu();
-        imu_msg.header.stamp = ros::Time::now();
         imu_msg.header.frame_id = optical_imu_id_[motionType];
         imu_msg.orientation.x = 0.0;
         imu_msg.orientation.y = 0.0;
@@ -350,7 +350,7 @@ private:
         }
         seq_motion[motionType] += 1;
         imu_msg.header.seq = seq_motion[motionType];
-        imu_msg.header.stamp = ros::Time(entry.timestamp_data.timestamp);
+        imu_msg.header.stamp = t;
         imu_publishers_[motionType].publish(imu_msg);
       };
 
@@ -703,7 +703,6 @@ private:
 
   // R200 and ZR300 types
   std::map<rs::stream, image_transport::Publisher> image_publishers_;
-  std::map<rs::stream, ros::Publisher> image_publishers_hw_timestamp_;
   std::map<rs::stream, int> image_format_;
   std::map<rs::stream, rs::format> format_;
   std::map<rs::stream, ros::Publisher> info_publisher_;
@@ -718,6 +717,9 @@ private:
   std::map<rs::stream, std::function<void(rs::frame)>> stream_callback_per_stream;
   std::map<rs::stream, sensor_msgs::CameraInfo> camera_info_;
   ros::Publisher pointcloud_publisher_;
+  bool intialize_time_base_;
+  double camera_time_base_;
+  ros::Time ros_time_base_;
 
   // ZR300 specific types
   bool isZR300_ = false;

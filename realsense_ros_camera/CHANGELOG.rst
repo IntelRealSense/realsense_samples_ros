@@ -2,6 +2,12 @@
 Changelog for package realsense_ros_camera
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.8.4 (2017-04-28)
+------------------
+* Fixed broken dependencies in packages, causing rosdep to fail when building on clean machine
+* ROS timestamp fixes
+* Contributors: Matt Curfman
+
 0.8.3 (2017-04-21)
 ------------------
 * Added URDF models for R200 and ZR300 cameras

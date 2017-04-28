@@ -12,6 +12,8 @@
     <arg name="hoi_max"                 default="0.1" />
     <arg name="doi_min"                 default="0.3" />
     <arg name="doi_max"                 default="3.0" />
+    <arg name="load_relocalization_map" default=""/>
+    <arg name="load_occupancy_map"      default=""/>
   
     <node pkg="nodelet" type="nodelet" name="realsense_ros_slam" args="load realsense_ros_slam/SNodeletSlam $(arg manager)" output="screen">
         <rosparam file="$(find realsense_ros_slam)/launch/params.yaml" command="load"/>            
@@ -27,6 +29,8 @@
         <param name="hoi_max"   type="double"  value="$(arg hoi_max)" />
         <param name="doi_min"   type="double"  value="$(arg doi_min)" />
         <param name="doi_max"   type="double"  value="$(arg doi_max)" />
+        <param name="load_relocalization_map" value="$(arg load_relocalization_map)"/>
+        <param name="load_occupancy_map" value="$(arg load_occupancy_map)"/>
     </node>
      <!--launch-prefix="gdb -ex run --><!--args"/-->
 

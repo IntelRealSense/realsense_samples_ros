@@ -1,5 +1,8 @@
 <launch>
   <arg name="manager" default="realsense_ros_camera_manager"/>
+  <arg name="load_relocalization_map" default=""/>
+  <arg name="load_occupancy_map"      default=""/>
+    
   <include file="$(find realsense_ros_camera)/launch/camera.launch">
     <arg name="manager" value="$(arg manager)"/>
     <arg name="fisheye_width" value="640"/>
@@ -12,5 +15,7 @@
   </include>
   <include file="$(find realsense_ros_slam)/launch/setup_demo.launch">
     <arg name="manager" value="$(arg manager)"/>
+    <arg name="load_relocalization_map" value="$(arg load_relocalization_map)"/>
+    <arg name="load_occupancy_map" value="$(arg load_occupancy_map)"/>
   </include>
 </launch>

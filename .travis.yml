@@ -1,0 +1,15 @@
+sudo: required
+dist: trusty
+language: generic
+
+env:
+  - ROS_DISTRO=kinetic
+
+before_install:
+  - export CI_SOURCE_PATH=$(pwd)
+  - export REPOSITORY_NAME=${PWD##*/}
+
+script:
+  - echo "Testing branch $TRAVIS_BRANCH of $REPOSITORY_NAME"
+  - docker run --rm -i -v $CI_SOURCE_PATH:$CI_SOURCE_PATH -e "CI_SOURCE_PATH=$CI_SOURCE_PATH" -e "HOME=$HOME" -e "ROS_DISTRO=$ROS_DISTRO" -t ubuntu:xenial sh -c "cd $CI_SOURCE_PATH; ./.travis.sh"
+

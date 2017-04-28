@@ -23,9 +23,8 @@ uint64_t cpt_depth = 0, cpt_fisheye = 0;
 rs::core::image_info info_fisheye[100], info_depth[100];
 
 std::string pkgpath;
-std::string trajectoryFilename;
-std::string relocalizationFilename;
-std::string occupancyFilename;
+std::string relocalization_filename_in, occupancy_filename_in;
+std::string trajectory_filename_out, relocalization_filename_out, occupancyFilenameOut;
 std::string topic_camera_pose, topic_reloc_pose, topic_pose2d, topic_map, topic_tracking_accuracy, topic_odom;
 double map_resolution, hoi_min, hoi_max, doi_min, doi_max;
 bool is_pub_odom = false;
@@ -60,8 +59,8 @@ void SubscribeTopics::onInit(ros::NodeHandle & nh, rs::slam::slam * slam)
 
 void SubscribeTopics::subscribeStreamMessages()
 {
-  std::string depthImageStream =  "camera/depth/image_raw_hw_timestamp";
-  std::string fisheyeImageStream =  "camera/fisheye/image_raw_hw_timestamp";
+  std::string depthImageStream =  "camera/depth/image_raw";
+  std::string fisheyeImageStream =  "camera/fisheye/image_raw";
   ROS_INFO_STREAM("Listening on " << depthImageStream);
   ROS_INFO_STREAM("Listening on " << fisheyeImageStream);
   l_depth_sub = l_nh.subscribe(depthImageStream, 100, & SubscribeTopics::depthMessageCallback, this);
@@ -113,7 +112,7 @@ void SubscribeTopics::getStreamSample(const sensor_msgs::ImageConstPtr &imageMsg
                            image_fisheye[cpt_fisheye].data,
                            stream,
                            rs::core::image_interface::flag::any,
-                           imageMsg->header.stamp.toSec(),
+                           /* ms */imageMsg->header.stamp.toSec() * /* seconds to ms */1000,
                            (uint64_t)imageMsg->header.seq,
                            rs::core::timestamp_domain::microcontroller
                          );
@@ -141,7 +140,7 @@ void SubscribeTopics::getStreamSample(const sensor_msgs::ImageConstPtr &imageMsg
                            image_depth[cpt_depth].data,
                            stream,
                            rs::core::image_interface::flag::any,
-                           imageMsg->header.stamp.toSec(),
+                           /* ms */ imageMsg->header.stamp.toSec() * /* seconds to ms */1000,
                            (uint64_t)imageMsg->header.seq,
                            rs::core::timestamp_domain::microcontroller
                          );
@@ -181,7 +180,7 @@ void SubscribeTopics::motionAccelCallback(const sensor_msgs::ImuConstPtr &imuMsg
 void SubscribeTopics::getMotionSample(const sensor_msgs::ImuConstPtr &imuMsg, rs::core::motion_type motionType)
 {
   rs::core::correlated_sample_set sample_set = {};
-  sample_set[motionType].timestamp = imuMsg->header.stamp.toSec();
+  sample_set[motionType].timestamp /* ms */ = imuMsg->header.stamp.toSec() * /* seconds to ms */1000;
   sample_set[motionType].type = motionType;
   sample_set[motionType].frame_number = imuMsg->header.seq;
   if (motionType == rs::core::motion_type::accel)
@@ -475,9 +474,11 @@ void SNodeletSlam::onInit()
   pnh.param< double >("hoi_max", hoi_max, 0.1);
   pnh.param< double >("doi_min", doi_min, 0.3);
   pnh.param< double >("doi_max", doi_max, 3.0);
-  pnh.param< std::string >("trajectoryFilename", trajectoryFilename, "trajectory.ppm");
-  pnh.param< std::string >("relocalizationFilename", relocalizationFilename, "relocalization.bin");
-  pnh.param< std::string >("occupancyFilename", occupancyFilename, "occupancy.bin");
+  pnh.param< std::string >("load_occupancy_map", occupancy_filename_in, "");
+  pnh.param< std::string >("load_relocalization_map", relocalization_filename_in, "");
+  pnh.param< std::string >("trajectoryFilename", trajectory_filename_out, "trajectory.ppm");
+  pnh.param< std::string >("relocalizationFilename", relocalization_filename_out, "relocalization.bin");
+  pnh.param< std::string >("occupancyFilename", occupancyFilenameOut, "occupancy.bin");
   pnh.param< std::string >("topic_camera_pose", topic_camera_pose, "camera_pose");
   pnh.param< std::string >("topic_reloc_pose", topic_reloc_pose, "reloc_pose");
   pnh.param< std::string >("topic_pose2d", topic_pose2d, "pose2d");
@@ -577,13 +578,13 @@ void SNodeletSlam::startIfReady()
 
 void SNodeletSlam::startSlam()
 {
-  ROS_INFO("Staring SLAM...");
+  ROS_INFO("Starting SLAM...");
 
   slam_->set_occupancy_map_resolution(map_resolution);
   slam_->set_occupancy_map_height_of_interest(hoi_min, hoi_max);
   slam_->set_occupancy_map_depth_of_interest(doi_min, doi_max);
-  slam_->force_relocalization_pose(false);
-
+  slam_->force_relocalization_pose(false);  
+  
   slam_event_handler scenePerceptionEventHandler;
   slam_->register_event_handler(&scenePerceptionEventHandler);
 
@@ -629,6 +630,29 @@ void SNodeletSlam::startSlam()
   {
     NODELET_ERROR("error : failed to set the enabled module configuration");
     return ;
+  }
+    
+  if (relocalization_filename_in.length() > 0)
+  {
+      if(slam_->load_relocalization_map(relocalization_filename_in) == rs::core::status_no_error)
+      {
+        ROS_INFO("Loaded relocalization map.");
+      }
+      else
+      {
+        ROS_WARN("Failed to load relocalization map.");
+      }
+  }
+  if (occupancy_filename_in.length() > 0) 
+  {
+      if (slam_->load_occupancy_map(occupancy_filename_in) == rs::core::status_no_error)
+      {
+        ROS_INFO("Loaded occupancy map.");
+      }
+      else
+      {
+        ROS_WARN("Failed to load occupancy map.");
+      }
   }
 
   //slam->load_relocalization_map(relocalizationFilename);
@@ -743,7 +767,7 @@ bool SNodeletSlam::saveOutput(realsense_ros_slam::SaveOutput::Request &req, real
 {
   bool success = true;
   
-  if (slam_->save_occupancy_map_as_ppm(pkgpath + trajectoryFilename, true) == rs::core::status::status_no_error)
+  if (slam_->save_occupancy_map_as_ppm(pkgpath + trajectory_filename_out, true) == rs::core::status::status_no_error)
   {
     std::cout << "Saved trajectory to PPM file." << std::endl;
   }
@@ -753,7 +777,7 @@ bool SNodeletSlam::saveOutput(realsense_ros_slam::SaveOutput::Request &req, real
     success = false;
   }
   
-  if(slam_->save_occupancy_map(pkgpath + occupancyFilename) == rs::core::status::status_no_error)
+  if(slam_->save_occupancy_map(pkgpath + occupancyFilenameOut) == rs::core::status::status_no_error)
   {
     std::cout << "Saved occupancy map to BIN file." << std::endl;
   }
@@ -763,7 +787,7 @@ bool SNodeletSlam::saveOutput(realsense_ros_slam::SaveOutput::Request &req, real
     success = false;
   }
   
-  if(slam_->save_relocalization_map(pkgpath + relocalizationFilename) == rs::core::status::status_no_error)
+  if(slam_->save_relocalization_map(pkgpath + relocalization_filename_out) == rs::core::status::status_no_error)
   {
     std::cout << "Saved relocalization map to BIN file." << std::endl;
   }

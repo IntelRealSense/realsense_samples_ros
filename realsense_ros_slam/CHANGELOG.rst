@@ -2,6 +2,13 @@
 Changelog for package realsense_ros_slam
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.8.4 (2017-04-28)
+------------------
+* Fixed broken dependencies in packages, causing rosdep to fail when building on clean machine
+* ROS timestamp fixes
+* Added launch arguments for loading of occupancy map and relocalization map.
+* Contributors: Ben Hirashima, Matt Curfman
+
 0.8.3 (2017-04-21)
 ------------------
 * Added a service to save slam output to files.
