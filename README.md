@@ -1,5 +1,8 @@
 # Intel® RealSense™ SDK for Linux ROS Samples
 
+## Build Status
+ROS Kinetic: [![Build Status](https://travis-ci.org/IntelRealSense/realsense_samples_ros.svg?branch=master)](https://travis-ci.org/IntelRealSense/realsense_samples_ros)
+
 ## Features
 These samples illustrate how to develop OSRF&reg; ROS* applications using the Intel® RealSense™ [ZR300](http://click.intel.com/intelr-realsensetm-development-kit-featuring-the-zr300.html) camera for Object Library (OR), Person Library (PT), and Simultaneous Localization And Mapping (SLAM).
 
