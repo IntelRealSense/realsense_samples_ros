@@ -76,6 +76,9 @@ target_link_libraries(${PROJECT_NAME}
   ${LIBRARIES_TO_LINK}
 )
 
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_generate_messages_cpp)
+add_dependencies(${PROJECT_NAME} ${catkin_EXPORTED_TARGETS})
+
 if (REALSENSE_ENABLE_TESTING)
   find_package(rostest REQUIRED)
 
