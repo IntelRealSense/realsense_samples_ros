@@ -15,7 +15,6 @@ To use realsense_ros_slam, you need a mobile agent with a RealSense ZR300 camera
 ###  Required Intel libraries:
 - Linux SDK
 - librealsense_slam
-- Link: https://securewiki.ith.intel.com/pages/viewpage.action?pageId=510951805
 
 ## Inputs and Outputs
 
