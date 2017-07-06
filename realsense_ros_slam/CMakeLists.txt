@@ -63,6 +63,8 @@ file(GLOB SOURCES
 
 add_library(${PROJECT_NAME} ${SOURCES})
 
+add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
 set(LIBRARIES_TO_LINK
     realsense
     realsense_image
