@@ -27,6 +27,12 @@ sudo sh -c 'echo "deb http://realsense-alm-public.s3.amazonaws.com/apt-repo xeni
 sudo apt update 
 sudo apt install -y librealsense-object-recognition-dev librealsense-persontracking-dev librealsense-slam-dev libopencv-dev
 
+#install compile depends
+sudo apt-get install libomp-dev
+
+#clang compile will failed ,so please manual switch to gcc if compile failed and remove directory "catkin_ws/src/build" (if already exists)
+#sudo update-alternatives --config c++
+
 # Download and compile ROS wrappers for Intel RealSense SDK for Linux
 mkdir -p catkin_ws/src
 cd catkin_ws/src/
